@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "racecar"
+version = "0.1.0"
+description = ""
+authors = ["Alberto Spina <alberto.spina.1996@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "3.9.7"
+numpy = "1.21.*"
+matplotlib = "^3.8.0"
+mypy = "^1.6.1"
+nptyping = "1.4.4"
+opencv-contrib-python = "4.5.4.58"
+jinja2 = "3.0"
+ipywidgets = "7.6.5"
+jupyter = "1.0.0"
+widgetsnbextension = "3.5.2"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
