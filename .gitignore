@@ -1,1 +1,5 @@
+# Jetbrains
+.idea/**
+
+# Misc
 .python-version
