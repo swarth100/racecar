@@ -57,10 +57,12 @@ def update():
     is pressed
     """
     # TODO (warmup): Implement acceleration and steering
-    rc.drive.set_speed_angle(0, 0)
+    # rc.drive.set_speed_angle(0, 0)
+    rc.drive.set_speed_angle(1, 1)
 
     if rc.controller.was_pressed(rc.controller.Button.A):
         print("Driving in a circle...")
+        rc.drive.set_speed_angle(1, 1)
         # TODO (main challenge): Drive in a circle
 
     # TODO (main challenge): Drive in a square when the B button is pressed

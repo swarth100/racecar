@@ -3,6 +3,9 @@ name = "racecar"
 version = "0.1.0"
 description = ""
 authors = ["Alberto Spina <alberto.spina.1996@gmail.com>"]
+packages = [
+    { include = "**/*.py", from = "racecar-aspina/library"  }
+]
 
 [tool.poetry.dependencies]
 python = "3.9.7"
