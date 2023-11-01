@@ -14,7 +14,7 @@ from ackermann_msgs.msg import AckermannDriveStamped
 
 import sys
 
-sys.path.insert(0, "../../library")
+sys.path.insert(0, "..")
 import racecar_utils as rc_utils
 
 

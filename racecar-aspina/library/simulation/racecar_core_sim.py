@@ -8,7 +8,6 @@ Manages communication with RacecarSim.
 
 import struct
 import socket
-import sys
 import select
 from enum import IntEnum
 from signal import signal, SIGINT
