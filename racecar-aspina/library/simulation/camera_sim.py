@@ -48,10 +48,23 @@ class CameraSim(Camera):
         )
 
         # Read the color image as 32 packets
+        image_size: int = self._WIDTH * self._HEIGHT * 4
         raw_bytes = self.__racecar._RacecarSim__receive_fragmented(
-            32, self._WIDTH * self._HEIGHT * 4, isAsync
+            32, image_size, isAsync
         )
         color_image = np.frombuffer(raw_bytes, dtype=np.uint8)
+
+        # NOTE: The following code is a workaround for a bug in the Unity simulator which might not return an image
+        # of the correct size. This code will be removed once the bug is fixed.
+        # Check if padding is needed and apply any required padding
+        if color_image.size < image_size:
+            padding_size = image_size - color_image.size
+
+            # Pad the array with a specific value, 255, which should be background
+            color_image = np.pad(
+                color_image, (0, padding_size), mode="constant", constant_values=0
+            )
+
         color_image = np.reshape(color_image, (self._HEIGHT, self._WIDTH, 4), "C")
 
         color_image = cv.cvtColor(color_image, cv.COLOR_RGB2BGR)

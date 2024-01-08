@@ -13,7 +13,7 @@ numpy = "1.21.*"
 matplotlib = "^3.8.0"
 mypy = "^1.6.1"
 nptyping = "1.4.4"
-opencv-contrib-python = "4.5.4.58"
+opencv-contrib-python = "4.5.3.56"
 jinja2 = "3.0"
 
 [tool.poetry.dev-dependencies]
