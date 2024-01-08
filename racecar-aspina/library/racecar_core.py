@@ -27,12 +27,14 @@ class Racecar(abc.ABC):
     """
 
     def __init__(self) -> None:
-        self.camera: camera.Camera
-        self.controller: controller.Controller
-        self.display: display.Display
-        self.drive: drive.Drive
-        self.lidar: lidar.Lidar
-        self.physics: physics.Physics
+        # NOTE: We initialise these modules to None so that IDEs can autocomplete.
+        # Simply assigning the types is likely to be skipped by some type checkers.
+        self.camera: camera.Camera = None  # type: ignore
+        self.controller: controller.Controller = None  # type: ignore
+        self.display: display.Display = None  # type: ignore
+        self.drive: drive.Drive = None  # type: ignore
+        self.lidar: lidar.Lidar = None  # type: ignore
+        self.physics: physics.Physics = None  # type: ignore
 
     @abc.abstractmethod
     def go(self) -> None:
