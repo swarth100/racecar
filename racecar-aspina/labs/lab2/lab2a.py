@@ -5,6 +5,7 @@ Summer 2020
 
 Lab 2A - Color Image Line Following
 """
+import itertools
 
 ########################################################################################
 # Imports
@@ -49,12 +50,41 @@ angle = 0.0  # The current angle of the car's wheels
 contour_center = None  # The (pixel row, pixel column) of contour
 contour_area = 0  # The area of contour
 
+line_priority_index: int = 0
+
 angle_controller = PID(Kp=1, Ki=0.1, Kd=0.05, setpoint=0, output_limits=(-1, 1))
 speed_controller = PID(Kp=1, Ki=0.05, Kd=0.02, setpoint=0, output_limits=(-0.85, 0.85))
 
 ########################################################################################
 # Functions
 ########################################################################################
+
+
+def get_hsv_ranges_and_colors() -> list[tuple[rc_utils.ColorBGR, list[THSV]]]:
+    """
+    Returns a tuple of lists of HSV ranges and colors to search for using itertools combinations based on the
+    global index value (`line_priority_index`).
+    """
+
+    hsv_range_permutations: tuple[list[THSV]] = tuple(
+        itertools.permutations([RED, GREEN, BLUE])
+    )
+
+    # noinspection PyTypeChecker
+    hsv_color_permutations: tuple[list[rc_utils.ColorBGR]] = tuple(
+        itertools.permutations(
+            [
+                rc_utils.ColorBGR.red,
+                rc_utils.ColorBGR.green,
+                rc_utils.ColorBGR.blue,
+            ]
+        )
+    )
+
+    return zip(
+        hsv_color_permutations[line_priority_index],
+        hsv_range_permutations[line_priority_index],
+    )
 
 
 def update_contour():
@@ -82,15 +112,7 @@ def update_contour():
         # Rationale: we prioritize contour colors based on the current mode.
         # If at least one contour is found of the given color (of sufficiently large size), we use it and stop
         # searching for other contours.
-        # TODO: Dynamically generate priority order
-        hsv_order: list[list[THSV]] = [RED, GREEN, BLUE]
-        hsv_color: list[rc_utils.ColorBGR] = [
-            rc_utils.ColorBGR.red,
-            rc_utils.ColorBGR.green,
-            rc_utils.ColorBGR.blue,
-        ]
-
-        for color, hsv_options in zip(hsv_color, hsv_order):
+        for color, hsv_options in get_hsv_ranges_and_colors():
             contours: list[NDArray] = []
             for hsv in hsv_options:
                 contours.extend(rc_utils.find_contours(image, hsv[0], hsv[1]))
@@ -151,6 +173,7 @@ def update():
     """
     global speed
     global angle
+    global line_priority_index
 
     # Search for contours in the current color image
     update_contour()
@@ -186,6 +209,15 @@ def update():
             print("No contour found")
         else:
             print("Center:", contour_center, "Area:", contour_area)
+
+    # Allow for switching of the color priority scheme by pressing X
+    if rc.controller.was_pressed(rc.controller.Button.X):
+        line_priority_index = (line_priority_index + 1) % 6
+
+        colors: list[str] = [
+            str(color.name.upper()) for color, _ in get_hsv_ranges_and_colors()
+        ]
+        print("Chaning line priority index to: ", colors)
 
 
 def update_slow():
