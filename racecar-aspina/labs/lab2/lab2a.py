@@ -12,6 +12,8 @@ Lab 2A - Color Image Line Following
 
 import sys
 from typing import Tuple, Optional
+
+from simple_pid import PID
 from typing_extensions import TypeAlias
 
 import cv2 as cv
@@ -30,7 +32,7 @@ rc = racecar_core.create_racecar()
 
 # >> Constants
 # The smallest contour we will recognize as a valid contour
-MIN_CONTOUR_AREA = 30
+MIN_CONTOUR_AREA = 60
 
 # A crop window for the floor directly in front of the car
 CROP_FLOOR = ((360, 0), (rc.camera.get_height(), rc.camera.get_width()))
@@ -46,6 +48,9 @@ speed = 0.0  # The current speed of the car
 angle = 0.0  # The current angle of the car's wheels
 contour_center = None  # The (pixel row, pixel column) of contour
 contour_area = 0  # The area of contour
+
+angle_controller = PID(Kp=1, Ki=0.1, Kd=0.05, setpoint=0, output_limits=(-1, 1))
+speed_controller = PID(Kp=1, Ki=0.05, Kd=0.02, setpoint=0, output_limits=(-0.85, 0.85))
 
 ########################################################################################
 # Functions
@@ -150,20 +155,24 @@ def update():
     # Search for contours in the current color image
     update_contour()
 
-    # Choose an angle based on contour_center
-    # If we could not find a contour, keep the previous angle
-    if contour_center is not None:
-        # Current implementation: bang-bang control (very choppy)
-        # TODO (warmup): Implement a smoother way to follow the line
-        if contour_center[1] < rc.camera.get_width() / 2:
-            angle = -1
-        else:
-            angle = 1
-
     # Use the triggers to control the car's speed
     forwardSpeed = rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
     backSpeed = rc.controller.get_trigger(rc.controller.Trigger.LEFT)
     speed = forwardSpeed - backSpeed
+
+    # Choose an angle based on contour_center
+    # If we could not find a contour, keep the previous angle
+    if contour_center is not None:
+        # We leveraged an existing PID controller to achieve proportional control.
+        # Proportional control is achieved over the angle and also over the speed.
+        target = rc.camera.get_width() / 2
+        error = target - contour_center[1]
+        normalised = error / target
+        angle = angle_controller(normalised)
+
+        # Only apply speed proportional control if the car is being manually driven.
+        if forwardSpeed or backSpeed:
+            speed = speed * (1 - abs(speed_controller(normalised)))
 
     rc.drive.set_speed_angle(speed, angle)
 

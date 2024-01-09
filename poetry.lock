@@ -2342,6 +2342,22 @@ objc = ["pyobjc-framework-Cocoa"]
 win32 = ["pywin32"]
 
 [[package]]
+name = "simple-pid"
+version = "2.0.0"
+description = "A simple, easy to use PID controller"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "simple-pid-2.0.0.tar.gz", hash = "sha256:b7649cb8912435ef4f2f4f997b10f2b85757bc9ee79d94c4fab33f9d3b84dd5b"},
+    {file = "simple_pid-2.0.0-py3-none-any.whl", hash = "sha256:0745411c3b67c78f02850b539753802701fe2b9d9461e137b5045950bb153e49"},
+]
+
+[package.extras]
+doc = ["furo (==2023.3.27)", "myst-parser (==1.0.0)", "sphinx (==6.2.1)", "sphinx-copybutton (==0.5.2)"]
+examples = ["matplotlib", "numpy"]
+test = ["pytest"]
+
+[[package]]
 name = "six"
 version = "1.16.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -2612,4 +2628,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "3.9.7"
-content-hash = "748f08900c40728425967d33fca2eaa1a8660d4f99133480da379c3ec1eb6e6f"
+content-hash = "bca7f7dde33b89d058f68a086e9c68cbb7f39272f764ded37f2e19d1a5816d3d"
