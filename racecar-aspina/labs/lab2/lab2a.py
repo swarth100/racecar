@@ -11,8 +11,12 @@ Lab 2A - Color Image Line Following
 ########################################################################################
 
 import sys
+from typing import Tuple, Optional
+from typing_extensions import TypeAlias
+
 import cv2 as cv
 import numpy as np
+from nptyping import NDArray
 
 sys.path.insert(1, "../../library")
 import racecar_core
@@ -32,8 +36,10 @@ MIN_CONTOUR_AREA = 30
 CROP_FLOOR = ((360, 0), (rc.camera.get_height(), rc.camera.get_width()))
 
 # Colors, stored as a pair (hsv_min, hsv_max)
-BLUE = ((90, 50, 50), (120, 255, 255))  # The HSV range for the color blue
-# TODO (challenge 1): add HSV ranges for other colors
+THSV: TypeAlias = Tuple[Tuple[int, int, int], Tuple[int, int, int]]
+BLUE: list[THSV] = [((90, 50, 50), (120, 255, 255))]
+GREEN: list[THSV] = [((40, 50, 50), (80, 255, 255))]
+RED: list[THSV] = [((0, 50, 50), (10, 255, 255)), ((160, 50, 50), (179, 255, 255))]
 
 # >> Variables
 speed = 0.0  # The current speed of the car
@@ -66,24 +72,39 @@ def update_contour():
         # Crop the image to the floor directly in front of the car
         image = rc_utils.crop(image, CROP_FLOOR[0], CROP_FLOOR[1])
 
-        # Find all of the blue contours
-        contours = rc_utils.find_contours(image, BLUE[0], BLUE[1])
+        contour: Optional[NDArray] = None
 
-        # Select the largest contour
-        contour = rc_utils.get_largest_contour(contours, MIN_CONTOUR_AREA)
+        # Rationale: we prioritize contour colors based on the current mode.
+        # If at least one contour is found of the given color (of sufficiently large size), we use it and stop
+        # searching for other contours.
+        # TODO: Dynamically generate priority order
+        hsv_order: list[list[THSV]] = [RED, GREEN, BLUE]
+        hsv_color: list[rc_utils.ColorBGR] = [
+            rc_utils.ColorBGR.red,
+            rc_utils.ColorBGR.green,
+            rc_utils.ColorBGR.blue,
+        ]
 
-        if contour is not None:
-            # Calculate contour information
-            contour_center = rc_utils.get_contour_center(contour)
-            contour_area = rc_utils.get_contour_area(contour)
+        for color, hsv_options in zip(hsv_color, hsv_order):
+            contours: list[NDArray] = []
+            for hsv in hsv_options:
+                contours.extend(rc_utils.find_contours(image, hsv[0], hsv[1]))
 
-            # Draw contour onto the image
-            rc_utils.draw_contour(image, contour)
-            rc_utils.draw_circle(image, contour_center)
+            # Filter contours by size to reduce noise
+            contour: NDArray = rc_utils.get_largest_contour(contours, MIN_CONTOUR_AREA)
 
-        else:
-            contour_center = None
-            contour_area = 0
+            if contour is not None:
+                # Calculate contour information
+                contour_center = rc_utils.get_contour_center(contour)
+                contour_area = rc_utils.get_contour_area(contour)
+
+                # Draw contour onto the image
+                rc_utils.draw_contour(image, contour, color=color.value)
+                rc_utils.draw_circle(image, contour_center)
+                break
+            else:
+                contour_center = None
+                contour_area = 0
 
         # Display the image to the screen
         rc.display.show_color_image(image)
