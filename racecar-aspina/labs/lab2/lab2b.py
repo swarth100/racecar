@@ -13,6 +13,7 @@ Lab 2B - Color Image Cone Parking
 import sys
 import cv2 as cv
 import numpy as np
+from simple_pid import PID
 
 sys.path.insert(1, "../../library")
 import racecar_core
@@ -32,10 +33,15 @@ MIN_CONTOUR_AREA = 30
 ORANGE = ((10, 100, 100), (20, 255, 255))
 
 # >> Variables
+running = False
 speed = 0.0  # The current speed of the car
 angle = 0.0  # The current angle of the car's wheels
 contour_center = None  # The (pixel row, pixel column) of contour
 contour_area = 0  # The area of contour
+
+TARGET_DEPTH = 30
+angle_controller = PID(Kp=1, Ki=0.0, Kd=0.0, setpoint=0, output_limits=(-1, 1))
+speed_controller = PID(Kp=0.5, Ki=0.0, Kd=0.3, setpoint=0, output_limits=(-1, 1))
 
 ########################################################################################
 # Functions
@@ -107,11 +113,34 @@ def update():
     """
     global speed
     global angle
+    global running
 
     # Search for contours in the current color image
     update_contour()
+    #         10        20
+    #         -         X
 
     # TODO: Park the car 30 cm away from the closest orange cone
+    if running:
+        if contour_center:
+            target: float = rc.camera.get_width() / 2
+            actual: float = contour_center[1]
+            angle_error = (target - actual) / target
+            angle = angle_controller(angle_error)
+
+            depth_image = rc.camera.get_depth_image()
+            depth: float = depth_image[contour_center]
+            speed_error = (TARGET_DEPTH - depth) / depth
+            speed = speed_controller(speed_error)
+
+            # Heuristic to stop the car rather than micro adjustments
+            if (abs(speed) < 0.5) and (abs(speed_error) < 0.05):
+                speed = 0
+
+            rc.drive.set_speed_angle(speed=speed, angle=angle)
+        else:
+            # Look for cone!
+            rc.drive.set_speed_angle(speed=1, angle=1)
 
     # Print the current speed and angle when the A button is held down
     if rc.controller.is_down(rc.controller.Button.A):
@@ -123,6 +152,15 @@ def update():
             print("No contour found")
         else:
             print("Center:", contour_center, "Area:", contour_area)
+
+    if rc.controller.is_down(rc.controller.Button.X):
+        print("Starting!")
+        running = True
+
+    if rc.controller.is_down(rc.controller.Button.Y):
+        print("Stopping!")
+        running = False
+        rc.drive.stop()
 
 
 def update_slow():
