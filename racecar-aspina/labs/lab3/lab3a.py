@@ -12,12 +12,8 @@ Lab 3A - Depth Camera Safety Stop
 
 import sys
 from enum import Enum
-from typing import Union
 
-import cv2 as cv
-import numpy as np
 from nptyping import NDArray
-from simple_pid import PID
 
 sys.path.insert(0, "../../library")
 import racecar_core
@@ -97,7 +93,7 @@ class Obstacle:
         left_point: tuple[int, int] = (mid_y, mid_x - offset_x)
         right_point: tuple[int, int] = (mid_y, mid_x + offset_x)
         top_point: tuple[int, int] = (mid_y - offset_y, mid_x)
-        bottom_point: tuple[int, int] = (mid_y + int(offset_y * 1.5), mid_x)
+        bottom_point: tuple[int, int] = (mid_y + offset_y, mid_x)
 
         mid_distance: float = get_closest_depth_at_position(
             depth_image, mid_point, pixel_range_x=120, pixel_range_y=50
@@ -168,6 +164,7 @@ class Mode(Enum):
     OBSTACLE_STOP = 1
     VOID_STOP = 2
     RAMP = 3
+    RAMP_STEEP = 4
 
 
 ########################################################################################
@@ -181,8 +178,6 @@ STATE: Mode = Mode.FORWARD
 # Distance in centimeters
 MIN_DISTANCE = 15
 MAX_DISTANCE = 1_000
-
-angle_controller = PID(Kp=1, Ki=0.0, Kd=0.0, setpoint=0, output_limits=(-1, 1))
 
 ########################################################################################
 # Functions
@@ -259,7 +254,7 @@ def update():
         print(">> OBSTACLE_STOP")
         depth, center_error_x = get_center_obstacle_depth(rc)
 
-        print("Depth:", depth "Center Error X", center_error_x)
+        print("Depth:", depth, "Center Error X", center_error_x)
 
         # Reset to FORWARD Mode when no obstacle is visible
         if not obstacle.is_front_obstacle:
@@ -284,8 +279,8 @@ def update():
             speed = 0
 
         angle_error: float = center_error_x * 2
-        if abs(angle_error) > 0.9:
-            angle = angle_controller(angle_error)
+        if abs(angle_error) > 0.95:
+            angle = rc_utils.clamp(angle, min=-1, max=1)
 
         rc.drive.set_speed_angle(speed=speed, angle=angle)
 
@@ -312,10 +307,15 @@ def update():
     elif STATE == Mode.RAMP:
         print(">> RAMP")
 
+        rc.drive.set_speed_angle(speed=1, angle=0)
+
         # On a ramp we must simply go straight until when we see the ramp
-        if obstacle.is_front_obstacle:
-            rc.drive.set_speed_angle(speed=1, angle=0)
-        else:
+        if (not obstacle.is_front_obstacle) and obstacle.is_cliff:
+            STATE = Mode.RAMP_STEEP
+
+    elif STATE == Mode.RAMP_STEEP:
+        print(">> RAMP_STEEP")
+        if not obstacle.is_cliff:
             STATE = Mode.FORWARD
 
     # Print the current speed and angle when the A button is held down
