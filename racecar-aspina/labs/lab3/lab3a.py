@@ -213,6 +213,7 @@ class Mode(Enum):
 rc = racecar_core.create_racecar()
 
 STATE: Mode = Mode.FORWARD
+ramp_count: int = 0
 
 # Distance in centimeters
 MIN_DISTANCE = 15
@@ -250,6 +251,7 @@ def update():
     is pressed
     """
     global STATE
+    global ramp_count
 
     # Use the triggers to control the car's speed
     rt = rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
@@ -347,11 +349,15 @@ def update():
         # When we will go onto the ramp all measurements will be off so we have a "STEEP" mode
         if (not obstacle.is_front_obstacle) and obstacle.is_cliff:
             STATE = Mode.RAMP_STEEP
+            # There is a time component to ramps
+            ramp_count = 2
 
     elif STATE == Mode.RAMP_STEEP:
         print(">> RAMP_STEEP")
 
-        if not obstacle.is_cliff:
+        ramp_count -= rc.get_delta_time()
+
+        if (not obstacle.is_cliff) and ramp_count < 0:
             STATE = Mode.FORWARD
 
     # Print the current speed and angle when the A button is held down
