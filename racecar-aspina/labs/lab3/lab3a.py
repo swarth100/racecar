@@ -213,7 +213,9 @@ class Mode(Enum):
 rc = racecar_core.create_racecar()
 
 STATE: Mode = Mode.FORWARD
-ramp_count: int = 0
+
+# Timer at which the last instruction will be followed blindly, ignoring new state
+BLIND_TIMER: int = 0
 
 # Distance in centimeters
 MIN_DISTANCE = 15
@@ -251,7 +253,12 @@ def update():
     is pressed
     """
     global STATE
-    global ramp_count
+    global BLIND_TIMER
+
+    # The blind timer can be set to ignore all state and force the car to follow the last instruction
+    BLIND_TIMER -= rc.get_delta_time()
+    if BLIND_TIMER > 0:
+        return
 
     # Use the triggers to control the car's speed
     rt = rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
@@ -350,14 +357,14 @@ def update():
         if (not obstacle.is_front_obstacle) and obstacle.is_cliff:
             STATE = Mode.RAMP_STEEP
             # There is a time component to ramps
-            ramp_count = 2
+            BLIND_TIMER = 2
 
     elif STATE == Mode.RAMP_STEEP:
         print(">> RAMP_STEEP")
 
-        ramp_count -= rc.get_delta_time()
+        rc.drive.set_speed_angle(speed=1, angle=0)
 
-        if (not obstacle.is_cliff) and ramp_count < 0:
+        if not obstacle.is_cliff:
             STATE = Mode.FORWARD
 
     # Print the current speed and angle when the A button is held down
