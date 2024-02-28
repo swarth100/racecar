@@ -30,6 +30,15 @@ def get_closest_depth_coordinates_at_position(
     pixel_range_x: int = 20,
     pixel_range_y: int = 20,
 ) -> tuple[int, int]:
+    """
+    Returns the coordinates of the closest depth pixel in the vicinity of the position.
+
+    :param depth_image: The depth image to search in.
+    :param position: The position to search around (passed as (Y, X).
+    :param pixel_range_x: The range in the x-axis to search around.
+    :param pixel_range_y: The range in the y-axis to search around.
+    :return: The coordinates of the closest depth pixel.
+    """
     (mid_y, mid_x) = position
     top_left: tuple[int, int] = (mid_y - pixel_range_y, mid_x - pixel_range_x)
     bottom_right: tuple[int, int] = (mid_y + pixel_range_y, mid_x + pixel_range_x)
@@ -52,13 +61,27 @@ def get_closest_depth_at_position(
     pixel_range_x: int = 20,
     pixel_range_y: int = 20,
 ) -> float:
+    """
+    Returns the depth of the closest depth pixel in the vicinity of the position.
+
+    :param depth_image: The depth image to search in.
+    :param position: The position to search around (passed as (Y, X).
+    :param pixel_range_x: The range in the x-axis to search around.
+    :param pixel_range_y: The range in the y-axis to search around.
+    :return: The depth of the closest depth pixel.
+    """
     closest_point = get_closest_depth_coordinates_at_position(
         depth_image, position, pixel_range_x, pixel_range_y
     )
     return depth_image[closest_point]
 
 
-def get_center_obstacle_depth(rc) -> tuple[float, float]:
+def get_center_obstacle_depth(rc: racecar_core.Racecar) -> tuple[float, float]:
+    """
+    Returns the depth and the error from the center of the obstacle.
+
+    :param rc: The racecar object.
+    """
     depth_image = rc.camera.get_depth_image()
 
     mid_x: int = rc.camera.get_width() // 2
@@ -116,22 +139,32 @@ class Obstacle:
         self._top_distance = top_distance or MAX_DISTANCE
         self._bottom_distance = bottom_distance or MAX_DISTANCE
 
-        print("B Point", bottom_point, "Bottom Distance:", self._bottom_distance)
-
     @property
     def is_left_obstacle(self) -> bool:
+        """
+        Returns whether there is an obstacle on the left side of the car.
+        """
         return self._left_distance < MIN_DISTANCE * 2
 
     @property
     def is_right_obstacle(self) -> bool:
+        """
+        Returns whether there is an obstacle on the right side of the car.
+        """
         return self._right_distance < MIN_DISTANCE * 2
 
     @property
     def is_front_obstacle(self) -> bool:
+        """
+        Returns whether there is an obstacle in front of the car.
+        """
         return self._mid_distance < MIN_DISTANCE * 4
 
     @property
     def is_general_obstacle(self) -> bool:
+        """
+        Returns whether there is an obstacle in general (in vision)
+        """
         return (
             (self._mid_distance < MIN_DISTANCE * 8)
             or (self._left_distance < MIN_DISTANCE * 8)
@@ -140,6 +173,9 @@ class Obstacle:
 
     @property
     def is_ramp_up(self) -> bool:
+        """
+        Returns whether there is a ramp in front of the car.
+        """
         return (
             self._bottom_distance < MIN_DISTANCE * 4
             and self._mid_distance < MIN_DISTANCE * 4
@@ -150,6 +186,9 @@ class Obstacle:
 
     @property
     def is_cliff(self) -> bool:
+        """
+        Returns whether there is a cliff in front of the car.
+        """
         return self._bottom_distance > MIN_DISTANCE * 4
 
     def __str__(self):
@@ -222,15 +261,12 @@ def update():
     obstacle: Obstacle = Obstacle(rc)
 
     if STATE == Mode.FORWARD:
+        # We slow down if we are in the presence of something of interest
         if obstacle.is_general_obstacle:
             print(">> FORWARD SLOW")
             speed *= 0.25
         else:
             print(">> FORWARD FAST")
-
-        print("-----------------")
-        print(obstacle.__str__())
-        print(obstacle.__repr__())
 
         if obstacle.is_ramp_up:
             # Drive up ramps
@@ -251,13 +287,9 @@ def update():
             rc.drive.set_speed_angle(speed=speed, angle=angle)
 
     elif STATE == Mode.OBSTACLE_STOP:
-        print(">> OBSTACLE_STOP")
         depth, center_error_x = get_center_obstacle_depth(rc)
-
-        print("Depth:", depth, "Center Error X", center_error_x)
-
-        # Reset to FORWARD Mode when no obstacle is visible
-        if not obstacle.is_front_obstacle:
+        if not obstacle.is_general_obstacle:
+            # Reset to FORWARD Mode when no obstacle is visible
             STATE = Mode.FORWARD
             return
 
@@ -280,7 +312,7 @@ def update():
 
         angle_error: float = center_error_x * 2
         if abs(angle_error) > 0.95:
-            angle = rc_utils.clamp(angle, min=-1, max=1)
+            angle = rc_utils.clamp(-angle_error, min=-1, max=1)
 
         rc.drive.set_speed_angle(speed=speed, angle=angle)
 
@@ -299,6 +331,8 @@ def update():
             pixel_range_y=200,
         )
 
+        # This is a terminal state which will stop the car at all costs.
+        # You cannot recover from this
         if depth < MIN_DISTANCE * 4:
             rc.drive.set_speed_angle(speed=-1, angle=0)
         else:
@@ -309,12 +343,14 @@ def update():
 
         rc.drive.set_speed_angle(speed=1, angle=0)
 
-        # On a ramp we must simply go straight until when we see the ramp
+        # On a ramp we must simply go straight until when we see the ramp.
+        # When we will go onto the ramp all measurements will be off so we have a "STEEP" mode
         if (not obstacle.is_front_obstacle) and obstacle.is_cliff:
             STATE = Mode.RAMP_STEEP
 
     elif STATE == Mode.RAMP_STEEP:
         print(">> RAMP_STEEP")
+
         if not obstacle.is_cliff:
             STATE = Mode.FORWARD
 
