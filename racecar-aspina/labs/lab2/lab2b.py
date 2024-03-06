@@ -33,7 +33,7 @@ MIN_CONTOUR_AREA = 30
 ORANGE = ((10, 100, 100), (20, 255, 255))
 
 # >> Variables
-running = False
+running = True
 speed = 0.0  # The current speed of the car
 angle = 0.0  # The current angle of the car's wheels
 contour_center = None  # The (pixel row, pixel column) of contour
@@ -136,6 +136,10 @@ def update():
             # Heuristic to stop the car rather than micro adjustments
             if (abs(speed) < 0.5) and (abs(speed_error) < 0.05):
                 speed = 0
+
+            # TODO: Handle speed
+            if np.isnan(speed):
+                speed = 0.5
 
             rc.drive.set_speed_angle(speed=speed, angle=angle)
         else:
