@@ -142,8 +142,6 @@ def update():
 
     # Search for contours in the current color image
     update_contour()
-    #         10        20
-    #         -         X
 
     # TODO: Park the car 30 cm away from the closest orange cone
     if STATE == Mode.FORWARD:
@@ -161,7 +159,7 @@ def update():
             )
 
             # If we still have forward momentum allow us to reverse at full speed
-            if depth < previous_depth:
+            if depth <= previous_depth:
                 min_speed = -0.5
                 max_speed = speed_limit
             else:
