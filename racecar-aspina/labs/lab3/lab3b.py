@@ -18,6 +18,8 @@ sys.path.insert(1, "../../library")
 import racecar_core
 import racecar_utils as rc_utils
 
+from lab3_utils import get_closest_depth_coordinates_at_position, Direction
+
 ########################################################################################
 # Common Utilities
 ########################################################################################
@@ -27,6 +29,7 @@ class Mode(Enum):
     FORWARD = 0
     SEARCH = 1
     COMPLETE_STOP = 2
+    FORCE_REVERSING = 3
 
 
 ########################################################################################
@@ -36,32 +39,28 @@ class Mode(Enum):
 rc = racecar_core.create_racecar()
 
 # >> Constants
-# The smallest contour we will recognize as a valid contour
-MIN_CONTOUR_AREA = 30
-
-# The HSV range for the color orange, stored as (hsv_min, hsv_max)
-ORANGE = ((10, 100, 100), (20, 255, 255))
+# Max observable distance
+MAX_DISTANCE = 1_000
+# Depth at which we wish to park our car
+TARGET_DEPTH = 30
+# The depth at which we consider an obstacle to be close or far
+OBSTACLE_DEPTH = 2 * TARGET_DEPTH
+FAR_OBSTACLE_DEPTH = 3 * TARGET_DEPTH
+# The midpoint of the camera
+MID_POINT_X: int = rc.camera.get_width() // 2
 
 # >> Variables
 # The current speed of the car
 speed = 0.0
 # The current angle of the car's wheels
 angle = 0.0
-# The last observed depth of the obstacle
-previous_depth = 99999
-# The (pixel row, pixel column) of contour
-contour_center: Optional[Tuple[int, int]] = None
-# The area of contour
-contour_area = 0
 
-# Depth at which we wish to park our car
-TARGET_DEPTH = 30
+# The direction tracker
+direction_tracker: Direction = Direction()
 
-# Midpoint of the camera
-MID_POINT_X: int = rc.camera.get_width() // 2
-MID_POINT_Y: int = rc.camera.get_height() // 2
-
+# State the Racecar is in
 STATE = Mode.FORWARD
+TIME_COUNTER: float = 0
 
 # Proportional Controllers
 ANGLE_KP = 0.5
@@ -102,65 +101,126 @@ def update():
     global speed
     global angle
     global STATE
+    global TIME_COUNTER
+
+    depth_image = rc.camera.get_depth_image()
+
+    mid_x: int = rc.camera.get_width() // 2
+    mid_y: int = rc.camera.get_height() // 2
+    dx: int = mid_x // 6 * 5
+
+    mid_point: tuple[int, int] = (mid_y, mid_x)
+    low_point: tuple[int, int] = (mid_y + 105, mid_x)
+    lhs_point: tuple[int, int] = (mid_y, mid_x - dx)
+    rhs_point: tuple[int, int] = (mid_y, mid_x + dx)
+
+    # NOTE! Points are in (y-x coordinates!)
+    closest_point_mid: tuple[int, int] = get_closest_depth_coordinates_at_position(
+        depth_image, mid_point, pixel_range_x=220, pixel_range_y=80
+    )
+    depth_mid: float = depth_image[closest_point_mid] or MAX_DISTANCE
+    closest_point_low: tuple[int, int] = get_closest_depth_coordinates_at_position(
+        depth_image, low_point, pixel_range_x=220, pixel_range_y=20
+    )
+    depth_low: float = depth_image[closest_point_low] or MAX_DISTANCE
+
+    closest_point_lhs: tuple[int, int] = get_closest_depth_coordinates_at_position(
+        depth_image, lhs_point, pixel_range_x=50, pixel_range_y=80
+    )
+    depth_lhs: float = depth_image[closest_point_lhs] or MAX_DISTANCE
+
+    closest_point_rhs: tuple[int, int] = get_closest_depth_coordinates_at_position(
+        depth_image, rhs_point, pixel_range_x=50, pixel_range_y=80
+    )
+    depth_rhs: float = depth_image[closest_point_rhs] or MAX_DISTANCE
+
+    # We do not need to track our direction if the obstacle is far away.
+    # Direction tracking allows the car to know if it's going forward or reversing.
+    direction_tracker.add_measurement(depth_low)
+    if depth_low > TARGET_DEPTH * 4:
+        direction_tracker.reset()
 
     # Park the car 30 cm away from the closest cone
     if STATE == Mode.FORWARD:
-        if contour_center is not None:
-            center_x: float = contour_center[1]
+        print(">> FORWARD")
+        if depth_lhs < OBSTACLE_DEPTH:
+            print(f"{depth_lhs=:.2f}, {depth_rhs=:.2f}")
+            STATE = Mode.FORCE_REVERSING
+            # We reverse for fixed amounts of time
+            TIME_COUNTER = 0.75
+            angle = 1
+
+        elif depth_rhs < OBSTACLE_DEPTH:
+            print(f"{depth_lhs=:.2f}, {depth_rhs=:.2f}")
+            STATE = Mode.FORCE_REVERSING
+            # We reverse for fixed amounts of time
+            TIME_COUNTER = 0.75
+            angle = -1
+
+        elif (depth_mid < FAR_OBSTACLE_DEPTH) or (depth_low < OBSTACLE_DEPTH):
+            center_x: float = closest_point_mid[1]
             angle_error = (center_x - MID_POINT_X) / MID_POINT_X
             angle_change: float = ANGLE_KP * angle_error * rc.get_delta_time()
             angle = rc_utils.clamp(angle + angle_change, min=-1, max=1)
 
-            depth_image = rc.camera.get_depth_image()
-            depth: float = depth_image[contour_center]
-
+            # As we get closer to obstacles we wish to reduce our speed
             speed_limit = rc_utils.clamp(
-                abs(depth / (TARGET_DEPTH * 6)), min=0.05, max=1
+                abs(depth_low / (TARGET_DEPTH * 12)), min=0.05, max=1
             )
+            speed_error = (depth_low - TARGET_DEPTH) / TARGET_DEPTH
 
             # If we still have forward momentum allow us to reverse at full speed
-            if depth <= previous_depth:
-                min_speed = -0.5
+            if direction_tracker.is_forward(depth_low):
+                min_speed = -1
                 max_speed = speed_limit
             else:
                 min_speed = -speed_limit
                 max_speed = 0.5
 
-            speed_error = (depth - TARGET_DEPTH) / TARGET_DEPTH
+                # If we reverse we wish to ensure the wheels point the opposite way
+                print(">> (REVERSING)!")
+                speed_error *= 100
+                angle_change *= -10
+
             speed_change: float = SPEED_KP * speed_error * rc.get_delta_time()
             speed = rc_utils.clamp(speed + speed_change, min=min_speed, max=max_speed)
 
             # Heuristic to stop the car rather than micro adjustments
-            if (abs(speed) < 0.05) and (abs(speed_error) < 0.05):
-                speed = 0
-
-            previous_depth = depth
-
+            if (abs(speed) < 0.01) and (abs(speed_error) < 0.01):
+                STATE = Mode.COMPLETE_STOP
         else:
             # Look for cone!
             STATE = Mode.SEARCH
 
     elif STATE == Mode.SEARCH:
-        angle = 1
+        print(">> SEARCH")
+        angle = -1
         speed = 1
 
-        if contour_center is not None:
+        if depth_mid < FAR_OBSTACLE_DEPTH:
             STATE = Mode.FORWARD
+            angle = 0
+            speed = 0.4
 
     elif STATE == Mode.COMPLETE_STOP:
+        print(">> COMPLETE_STOP")
         angle = 0
         speed = 0
 
-    # Print the current speed and angle when the A button is held down
-    if rc.controller.is_down(rc.controller.Button.A):
-        print("Speed:", speed, "Angle:", angle)
+        if depth_mid > OBSTACLE_DEPTH:
+            STATE = Mode.FORWARD
 
-    # Print the center and area of the largest contour when B is held down
-    if rc.controller.is_down(rc.controller.Button.B):
-        if contour_center is None:
-            print("No contour found")
-        else:
-            print("Center:", contour_center, "Area:", contour_area)
+    elif STATE == Mode.FORCE_REVERSING:
+        print(">> FORCE_REVERSING")
+        speed = -1
+
+        # We decrease the time counter to ensure we do not reverse forever
+        TIME_COUNTER -= rc.get_delta_time()
+
+        if TIME_COUNTER <= 0:
+            TIME_COUNTER = 0
+            angle = 0
+            STATE = Mode.FORWARD
 
     if rc.controller.is_down(rc.controller.Button.X):
         STATE = Mode.FORWARD
@@ -171,31 +231,10 @@ def update():
     rc.drive.set_speed_angle(speed=speed, angle=angle)
 
 
-def update_slow():
-    """
-    After start() is run, this function is run at a constant rate that is slower
-    than update().  By default, update_slow() is run once per second
-    """
-    # Print a line of ascii text denoting the contour area and x position
-    if rc.camera.get_color_image() is None:
-        # If no image is found, print all X's and don't display an image
-        print("X" * 10 + " (No image) " + "X" * 10)
-    else:
-        # If an image is found but no contour is found, print all dashes
-        if contour_center is None:
-            print("-" * 32 + " : area = " + str(contour_area))
-
-        # Otherwise, print a line of dashes with a | indicating the contour x-position
-        else:
-            s = ["-"] * 32
-            s[int(contour_center[1] / 20)] = "|"
-            print("".join(s) + " : area = " + str(contour_area))
-
-
 ########################################################################################
 # DO NOT MODIFY: Register start and update and begin execution
 ########################################################################################
 
 if __name__ == "__main__":
-    rc.set_start_update(start, update, update_slow)
+    rc.set_start_update(start, update)
     rc.go()

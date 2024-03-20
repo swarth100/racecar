@@ -13,16 +13,12 @@ Lab 3C - Depth Camera Wall Parking
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Tuple
 
 sys.path.insert(1, "../../library")
 import racecar_core
 import racecar_utils as rc_utils
 
-from lab3_utils import (
-    get_closest_depth_at_position,
-    get_closest_depth_coordinates_at_position,
-)
+from lab3_utils import get_closest_depth_coordinates_at_position, Direction
 
 
 ########################################################################################
@@ -35,27 +31,6 @@ class Mode(Enum):
     SEARCH = 1
     COMPLETE_STOP = 2
     FORCE_REVERSING = 3
-
-
-@dataclass
-class Direction:
-    measurements: list[float] = field(default_factory=list)
-
-    def add_measurement(self, measurement: float):
-        self.measurements.append(measurement)
-
-        # We add depths to the end of the list, and we pop front to cycle through
-        if len(self.measurements) > NUM_DEPTH_MEASUREMENTS:
-            self.measurements.pop(0)
-
-    def is_forward(self, comp_measurement: float) -> bool:
-        if len(self.measurements) != NUM_DEPTH_MEASUREMENTS:
-            return True
-
-        return comp_measurement < (sum(self.measurements) / len(self.measurements))
-
-    def reset(self):
-        self.measurements.clear()
 
 
 ########################################################################################
@@ -74,8 +49,6 @@ angle = 0.0
 TARGET_DEPTH = 20
 # Max detectable distance by the depth sensor
 MAX_DISTANCE = 1_000
-# Number of depth measurements to average
-NUM_DEPTH_MEASUREMENTS: int = 10
 # The direction tracker
 direction_tracker: Direction = Direction()
 
@@ -131,8 +104,8 @@ def update():
     depth_image = rc.camera.get_depth_image()
 
     mid_x: int = rc.camera.get_width() // 2
-    dx: int = mid_x // 3 * 2
     mid_y: int = rc.camera.get_height() // 2
+    dx: int = mid_x // 3 * 2
 
     # NOTE! Points are in (y-x coordinates!)
     mid_point: tuple[int, int] = (mid_y, mid_x)
@@ -154,10 +127,10 @@ def update():
     min_depth: float = min(depth_lhs, depth_rhs)
     max_depth: float = max(depth_lhs, depth_rhs)
     depth_delta = abs(max_depth - min_depth)
-    direction_tracker.add_measurement(depth)
 
     # We do not need to track our direction if the obstacle is far away.
     # Direction tracking allows the car to know if it's going forward or reversing.
+    direction_tracker.add_measurement(depth)
     if min_depth > TARGET_DEPTH * 4:
         direction_tracker.reset()
 

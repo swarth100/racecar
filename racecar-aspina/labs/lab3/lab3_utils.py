@@ -1,4 +1,5 @@
 import sys
+from dataclasses import dataclass, field
 
 from nptyping import NDArray
 
@@ -57,3 +58,30 @@ def get_closest_depth_at_position(
         depth_image, position, pixel_range_x, pixel_range_y
     )
     return depth_image[closest_point]
+
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Number of depth measurements to average for determining direction
+NUM_DIRECTION_MEASUREMENTS: int = 10
+
+
+@dataclass
+class Direction:
+    measurements: list[float] = field(default_factory=list)
+
+    def add_measurement(self, measurement: float):
+        self.measurements.append(measurement)
+
+        # We add depths to the end of the list, and we pop front to cycle through
+        if len(self.measurements) > NUM_DIRECTION_MEASUREMENTS:
+            self.measurements.pop(0)
+
+    def is_forward(self, comp_measurement: float) -> bool:
+        if len(self.measurements) != NUM_DIRECTION_MEASUREMENTS:
+            return True
+
+        return comp_measurement < (sum(self.measurements) / len(self.measurements))
+
+    def reset(self):
+        self.measurements.clear()
