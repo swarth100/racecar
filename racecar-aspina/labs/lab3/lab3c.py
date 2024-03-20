@@ -156,17 +156,19 @@ def update():
     depth_delta = abs(max_depth - min_depth)
     direction_tracker.add_measurement(depth)
 
+    # We do not need to track our direction if the obstacle is far away.
+    # Direction tracking allows the car to know if it's going forward or reversing.
+    if min_depth > TARGET_DEPTH * 4:
+        direction_tracker.reset()
+
     if STATE == Mode.FORWARD:
         print(">> FORWARD")
-
-        if min_depth > TARGET_DEPTH * 4:
-            print("!! RESET DIRECTION TRACKER")
-            direction_tracker.reset()
 
         if depth < TARGET_DEPTH * 20:
             angle_error: float = depth_lhs - depth_rhs
             angle_change: float = ANGLE_KP * angle_error * rc.get_delta_time()
 
+            # As we get closer to obstacles we wish to reduce our speed
             speed_limit = rc_utils.clamp(
                 abs(depth / (TARGET_DEPTH * 8)), min=0.05, max=1
             )
@@ -181,15 +183,15 @@ def update():
                 max_speed = 0.5
 
                 # If we reverse we wish to ensure the wheels point the opposite way
-                print("!! REVERSING ANGLE!")
+                print(">> (REVERSING)!")
                 angle_change *= -10
 
-            min_depth_error: float = (min_depth - TARGET_DEPTH) / TARGET_DEPTH
-            max_depth_error: float = (max_depth - TARGET_DEPTH) / TARGET_DEPTH
-            speed_error: float = min_depth_error
+            speed_error: float = (min_depth - TARGET_DEPTH) / TARGET_DEPTH
 
             # We attempt to handle cases where the wall is at a strong offset
-            if (min_depth_error < 1) and (depth_delta > TARGET_DEPTH):
+            # Strong offsets occur when the LHS and RHS readings are significantly different
+            # We must significantly reverse to re-approach the wall
+            if (speed_error < 1) and (depth_delta > TARGET_DEPTH):
                 STATE = Mode.FORCE_REVERSING
                 # We reverse for fixed amounts of time
                 TIME_COUNTER = 2.0
@@ -201,12 +203,6 @@ def update():
             # Heuristic to stop the car rather than micro adjustments
             if (abs(speed) < 0.03) and (abs(speed_error) < 0.01):
                 STATE = Mode.COMPLETE_STOP
-
-            print(
-                f"{depth_lhs=:.2f}, {depth_rhs=:.2f}, {depth=:.2f}, {depth_delta=:.2f}"
-            )
-            print(f"{min_depth_error=:.2f}, {max_depth_error=:.2f}")
-            print(f"{speed=:.2f}, {speed_error=:.2f}")
 
         else:
             # Look for wall!
@@ -228,13 +224,12 @@ def update():
         if depth > TARGET_DEPTH * 2:
             STATE = Mode.FORWARD
 
-        print(f"{depth_lhs=:.2f}, {depth_rhs=:.2f}, {depth=:.2f}, {depth_delta=:.2f}")
-
     elif STATE == Mode.FORCE_REVERSING:
         print(">> FORCE_REVERSING")
         angle = 0
         speed = -1
 
+        # We decrease the time counter to ensure we do not reverse forever
         TIME_COUNTER -= rc.get_delta_time()
 
         if TIME_COUNTER <= 0:
