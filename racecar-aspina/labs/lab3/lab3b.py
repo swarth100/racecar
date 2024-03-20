@@ -72,43 +72,6 @@ SPEED_KP = 200
 ########################################################################################
 
 
-def update_contour():
-    """
-    Finds contours in the current color image and uses them to update contour_center
-    and contour_area
-    """
-    global contour_center
-    global contour_area
-
-    image = rc.camera.get_color_image()
-
-    if image is None:
-        contour_center = None
-        contour_area = 0
-    else:
-        # Find all the orange contours
-        contours = rc_utils.find_contours(image, ORANGE[0], ORANGE[1])
-
-        # Select the largest contour
-        contour = rc_utils.get_largest_contour(contours, MIN_CONTOUR_AREA)
-
-        if contour is not None:
-            # Calculate contour information
-            contour_center = rc_utils.get_contour_center(contour)
-            contour_area = rc_utils.get_contour_area(contour)
-
-            # Draw contour onto the image
-            rc_utils.draw_contour(image, contour)
-            rc_utils.draw_circle(image, contour_center)
-
-        else:
-            contour_center = None
-            contour_area = 0
-
-        # Display the image to the screen
-        rc.display.show_color_image(image)
-
-
 def start():
     """
     This function is run once every time the start button is pressed
@@ -140,10 +103,7 @@ def update():
     global angle
     global STATE
 
-    # Search for contours in the current color image
-    update_contour()
-
-    # TODO: Park the car 30 cm away from the closest orange cone
+    # Park the car 30 cm away from the closest cone
     if STATE == Mode.FORWARD:
         if contour_center is not None:
             center_x: float = contour_center[1]
